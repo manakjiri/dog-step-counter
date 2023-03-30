@@ -1,0 +1,20 @@
+# STM32CubeIDE
+# build dirs
+**/Debug
+**/Release
+**/build
+# project files that break other's configs
+.mxproject
+**/.settings
+# launch files that contain absolute path and thus also break
+*.launch
+
+# python
+**/__pycache__
+
+# VS CODE
+**/.vscode
+
+# patch 
+*.rej
+*.orig
