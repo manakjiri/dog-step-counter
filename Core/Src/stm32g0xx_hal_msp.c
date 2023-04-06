@@ -1,3 +1,7 @@
+/* ########################################################################################
+##### THIS FILE GETS MODIFIED OR OVERWRITTEN BY THE preprocess.py SCRIPT BEFORE BUILD #####
+######################################################################################## */
+
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -19,7 +23,7 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include "init.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */

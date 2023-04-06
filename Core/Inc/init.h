@@ -11,22 +11,21 @@ extern "C" {
 
 #include "stm32g0xx_hal.h"
 
-#define T_NRST_Pin GPIO_PIN_2
-#define T_NRST_GPIO_Port GPIOF
-#define T_VCP_TX_Pin GPIO_PIN_2
-#define T_VCP_TX_GPIO_Port GPIOA
-#define T_VCP_RX_Pin GPIO_PIN_3
-#define T_VCP_RX_GPIO_Port GPIOA
-#define LD3_Pin GPIO_PIN_6
-#define LD3_GPIO_Port GPIOC
-#define T_JTMS_Pin GPIO_PIN_13
-#define T_JTMS_GPIO_Port GPIOA
-#define T_JTCK_Pin GPIO_PIN_14
-#define T_JTCK_GPIO_Port GPIOA
+#define SPI1_CS_Pin GPIO_PIN_4
+#define SPI1_CS_GPIO_Port GPIOA
+#define IRR0_Pin GPIO_PIN_4
+#define IRR0_GPIO_Port GPIOB
+#define IRR0_EXTI_IRQn EXTI4_15_IRQn
 
+extern I2C_HandleTypeDef hi2c1;
+#define ZST_HAL_I2C1_PRESENT
+extern SPI_HandleTypeDef hspi1;
+#define ZST_HAL_SPI1_PRESENT
 
 void SystemClock_Config(void);
 void MX_GPIO_Init(void);
+void MX_SPI1_Init(void);
+void MX_I2C1_Init(void);
 void Error_Handler(void);
 
 #ifdef HAL_TIM_MODULE_ENABLED
