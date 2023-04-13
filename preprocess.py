@@ -5,6 +5,7 @@ this is a preprocessor that enables a C++ development workflow for STM32CubeIDE
 import argparse, re, subprocess
 from pathlib import Path
 from textwrap import TextWrapper
+import traceback
 
 parser = argparse.ArgumentParser(description=d)
 parser.add_argument('ioc_file', help='path to the .ioc CubeMX file of your project')
@@ -22,8 +23,10 @@ MAIN_CPP_PATH = BASE_PATH.joinpath('Core/Src/main.cpp')
 
 INCLUDE_REPLACE = list(BASE_PATH.glob('Core/Src/stm32*.c'))
 INCLUDE_REPLACE.append(BASE_PATH.joinpath('USBPD/usbpd_dpm_user.c'))
+INCLUDE_REPLACE.extend(BASE_PATH.glob('FATFS/**/*'))
 
 PATCHES_PATHS = list(BASE_PATH.glob('patches/*.patch'))
+PATCH_EXEC_PATHS = [Path('/usr/bin/patch'), Path('/run/host/usr/bin/patch')]
 
 COMMENT_OPEN = '/*'
 COMMENT_CLOSE = '*/'
@@ -179,7 +182,7 @@ def main():
 
 
     for p in INCLUDE_REPLACE:
-        if p.exists():
+        if p.exists() and p.is_file():
             file = p.read_text()
             if '#include "main.h' in file:
                 info(f'Replacing the include directive in {p}')
@@ -199,20 +202,30 @@ def main():
         MAIN_CPP_PATH.write_text(MAIN_CPP_TEMPLATE)
 
     if not args.no_patch:
-        for p in PATCHES_PATHS:
-            
-            info(f'attempting to apply the "{p}" patch, you can disable this using the "--no-patch" flag')
-            opts = '--unified --no-backup-if-mismatch -p0 --forward'
-            paths = f'-i {p.absolute()} -d {BASE_PATH.absolute()}'
-            
-            dry = run_command(f'patch {opts} --dry-run {paths}')
-            if dry.returncode == 0:
-                run_command(f'patch {opts} {paths}')
+        
+        patch_path = ''
+        for p in PATCH_EXEC_PATHS:
+            if p.is_file():
+                patch_path = p
+                break
+        else:
+            warning(f'unable to apply patches: the patch program is unavailable, tried checking: {PATCH_EXEC_PATHS}')
 
-                for rej in BASE_PATH.glob('**/*.rej'):
-                    rej_target = p.parent.joinpath(rej.name)
-                    warning(f'moving {rej} to {rej_target}')
-                    rej.rename(rej_target)
+        if patch_path:
+            for p in PATCHES_PATHS:
+                info(f'attempting to apply the "{p}" patch, you can disable this using the "--no-patch" flag')
+                opts = '--unified --no-backup-if-mismatch -p0 --forward'
+                paths = f'-i {p.absolute()} -d {BASE_PATH.absolute()}'
+                
+                dry = run_command(f'{patch_path} {opts} --dry-run {paths}')
+                
+                if dry.returncode == 0: #pset.can_patch():
+                    run_command(f'{patch_path} {opts} {paths}')
+
+                    for rej in BASE_PATH.glob('**/*.rej'):
+                        rej_target = p.parent.joinpath(rej.name)
+                        warning(f'moving {rej} to {rej_target}')
+                        rej.rename(rej_target)
         
 
 if __name__ == '__main__':
@@ -224,5 +237,5 @@ if __name__ == '__main__':
             f'please check the setup documentation at {SCRIPT_SETUP_DOCS} and the README.md file.'
         )
         info('Exception traceback:')
-        raise
+        print(traceback.format_exc())
 

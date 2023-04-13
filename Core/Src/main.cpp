@@ -4,6 +4,7 @@
 #include "app_fatfs.h"
 #include <stdio.h>
 #include "fatfs_sd.h"
+#include "app_fatfs.h"
 
 uint16_t address = 0;
 FATFS fs;
