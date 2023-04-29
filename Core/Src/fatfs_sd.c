@@ -27,19 +27,20 @@ static uint8_t PowerFlag = 0;				/* Power flag */
 static void SELECT(void)
 {
 	HAL_GPIO_WritePin(SD_CS_PORT, SD_CS_PIN, GPIO_PIN_RESET);
-	HAL_Delay(1);
+	//HAL_Delay(1);
 }
 
 /* slave deselect */
 static void DESELECT(void)
 {
 	HAL_GPIO_WritePin(SD_CS_PORT, SD_CS_PIN, GPIO_PIN_SET);
-	HAL_Delay(1);
+	//HAL_Delay(1);
 }
 
 /* SPI transmit a byte */
 static void SPI_TxByte(uint8_t data)
 {
+	while(*HSPI_SDCARD.hdmatx->State !=HAL_DMA_STATE_READY);
 	while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE));
 	HAL_SPI_Transmit(HSPI_SDCARD, &data, 1, SPI_TIMEOUT);
 }
@@ -48,7 +49,7 @@ static void SPI_TxByte(uint8_t data)
 static void SPI_TxBuffer(uint8_t *buffer, uint16_t len)
 {
 	while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE));
-	HAL_SPI_Transmit(HSPI_SDCARD, buffer, len, SPI_TIMEOUT);
+	HAL_SPI_Transmit_DMA(HSPI_SDCARD, buffer, len);//possibly take as SEM
 }
 
 /* SPI receive a byte */
@@ -57,6 +58,7 @@ static uint8_t SPI_RxByte(void)
 	uint8_t dummy, data;
 	dummy = 0xFF;
 
+	while(*HSPI_SDCARD.hdmatx->State !=HAL_DMA_STATE_READY);
 	while(!__HAL_SPI_GET_FLAG(HSPI_SDCARD, SPI_FLAG_TXE));
 	HAL_SPI_TransmitReceive(HSPI_SDCARD, &dummy, &data, 1, SPI_TIMEOUT);
 
