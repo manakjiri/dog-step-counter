@@ -5924,7 +5924,7 @@ void putc_bfd (		/* Buffered write with code conversion */
 
 
 	if (_USE_STRFUNC == 2 && c == '\n') {	 /* LF -> CRLF conversion */
-		//putc_bfd(pb, '\r');
+		putc_bfd(pb, '\r');
 	}
 
 	i = pb->idx;		/* Write index of pb->buf[] */

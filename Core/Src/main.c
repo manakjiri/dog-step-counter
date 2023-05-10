@@ -76,14 +76,14 @@ struct {
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c1;
-DMA_HandleTypeDef hdma_i2c1_rx;
+I2C_HandleTypeDef hi2c2;
+DMA_HandleTypeDef hdma_i2c2_rx;
 
 SPI_HandleTypeDef hspi1;
 DMA_HandleTypeDef hdma_spi1_tx;
 
 /* USER CODE BEGIN PV */
-
+I2C_HandleTypeDef * const imu_i2c = &hi2c2;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,7 +91,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_SPI1_Init(void);
-static void MX_I2C1_Init(void);
+static void MX_I2C2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -134,7 +134,7 @@ int main(void)
   if (MX_FATFS_Init() != APP_OK) {
     Error_Handler();
   }
-  MX_I2C1_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
 
 	//FATFS
@@ -154,42 +154,60 @@ int main(void)
 	//scan i2c
 	while (address == 0) {
 		for (uint16_t i = 1; i < 128; i++) {
-			if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t) (i << 1), 3, 10)
+			if (HAL_I2C_IsDeviceReady(imu_i2c, (uint16_t) (i << 1), 3, 10)
 					== HAL_OK)
 				address = i << 1;
 		}
 	}
 
 	uint8_t data;
-	HAL_I2C_Mem_Read(&hi2c1, address, 0x75, 1, &data, 1, 10);  //who-I-am check
-	if (data != 0x68)
+	HAL_I2C_Mem_Read(imu_i2c, address, 0x75, 1, &data, 1, 10);  //who-I-am check
+	if (data != 0x68 && data != 0x72)
 		Error_Handler();
 
 	HAL_Delay(50);
 
 	data = 0;
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x6b, 1, &data, 1, 10);  //pow conf
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x1b, 1, &data, 1, 10);  //gyr conf
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x1c, 1, &data, 1, 10);  //acc conf
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x6b, 1, &data, 1, 10);  //pow conf
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x1b, 1, &data, 1, 10);  //gyr conf
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x1c, 1, &data, 1, 10);  //acc conf
 	data = 16 - 1;  //data rate 8kHz prescaller; could be adjusted 32-1 (250 Hz) usually works without errors
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x19, 1, &data, 1, 10);  //data rate
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x19, 1, &data, 1, 10);  //data rate
 
 	data = 1 << 4;
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x37, 1, &data, 1, 10); //irr clear when read
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x37, 1, &data, 1, 10); //irr clear when read
 	data = 1 << 0;
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x38, 1, &data, 1, 10);  //irr enable
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x38, 1, &data, 1, 10);  //irr enable
 	data = 0x7;
-	HAL_I2C_Mem_Write(&hi2c1, address, 0x68, 1, &data, 1, 10);  //reset
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x68, 1, &data, 1, 10);  //reset
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	size = 20 * 1024 * 1024 / 64;  //1MB
+	size = 20 * 16 * 1024 / 64;  //1MB
 	//size = 1024 * free_space /64;
 	while (size) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+		/* poll for data by reading the status register, where bit 0 is DATA_RDY_INT
+		 * the register will clear automatically after its read */
+		HAL_I2C_Mem_Read(imu_i2c, address, 0x3A, 1, &data, 1, 2);
+		if (data & 0x01) {
+			HAL_I2C_Mem_Read(imu_i2c, address, 0x3b, 1, &(Rec_Data[Rec_Data_Ri]), 14,2);//TODO DMA
+			Rec_Data_Ri += 14;
+
+
+			if(Rec_Data_Ri == Rec_Data_Ti) {//overrun
+				//error_counter += 1;
+				Rec_Data_Ri -= 14;
+			}
+
+			if(Rec_Data_Ri == (RD_LEN)) Rec_Data_Ri = 0;
+		}
+
+
 		if (Rec_Data_Ri != Rec_Data_Ti) {
 			--size;
 			acc.x = (int16_t)(Rec_Data[Rec_Data_Ti+0]<<8 | Rec_Data[Rec_Data_Ti+1]);
@@ -274,50 +292,50 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief I2C2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+static void MX_I2C2_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
+  /* USER CODE BEGIN I2C2_Init 0 */
 
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE END I2C2_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
+  /* USER CODE BEGIN I2C2_Init 1 */
 
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00602173;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.Timing = 0x00602173;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Analogue filter
   */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c2, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
   {
     Error_Handler();
   }
 
   /** Configure Digital filter
   */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c2, 0) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
+  /* USER CODE BEGIN I2C2_Init 2 */
 
-  /* USER CODE END I2C1_Init 2 */
+  /* USER CODE END I2C2_Init 2 */
 
 }
 
@@ -375,7 +393,7 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Ch4_5_DMAMUX1_OVR_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Ch4_5_DMAMUX1_OVR_IRQn, 1, 0);
+  HAL_NVIC_SetPriority(DMA1_Ch4_5_DMAMUX1_OVR_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Ch4_5_DMAMUX1_OVR_IRQn);
 
 }
@@ -398,12 +416,30 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : PB9 PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF6_I2C1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
   /*Configure GPIO pin : SPI1_CS_Pin */
   GPIO_InitStruct.Pin = SPI1_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SPI1_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : IRR0_Pin */
   GPIO_InitStruct.Pin = IRR0_Pin;

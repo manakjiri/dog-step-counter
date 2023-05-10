@@ -24,7 +24,7 @@
 /* USER CODE BEGIN Includes */
 #define RD_LEN  (8 * 14 * 2 *2)
 
-extern I2C_HandleTypeDef hi2c1;
+extern I2C_HandleTypeDef *imu_i2c;
 
 extern volatile uint32_t size;
 extern uint8_t Rec_Data[RD_LEN];// 512/64 = 8 -> 8*14*2 (half transfer)
@@ -66,7 +66,7 @@ uint32_t error_counter;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef hdma_i2c1_rx;
+extern DMA_HandleTypeDef hdma_i2c2_rx;
 extern DMA_HandleTypeDef hdma_spi1_tx;
 /* USER CODE BEGIN EV */
 
@@ -178,7 +178,7 @@ void EXTI4_15_IRQHandler(void)
   HAL_GPIO_EXTI_IRQHandler(IRR0_Pin);
   /* USER CODE BEGIN EXTI4_15_IRQn 1 */
 	if(size){
-		HAL_I2C_Mem_Read(&hi2c1, address, 0x3b, 1, &(Rec_Data[Rec_Data_Ri]), 14,2);//TODO DMA
+		HAL_I2C_Mem_Read(imu_i2c, address, 0x3b, 1, &(Rec_Data[Rec_Data_Ri]), 14,2);//TODO DMA
 		Rec_Data_Ri += 14;
 
 
@@ -214,7 +214,7 @@ void DMA1_Ch4_5_DMAMUX1_OVR_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Ch4_5_DMAMUX1_OVR_IRQn 0 */
 
   /* USER CODE END DMA1_Ch4_5_DMAMUX1_OVR_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_i2c1_rx);
+  HAL_DMA_IRQHandler(&hdma_i2c2_rx);
   /* USER CODE BEGIN DMA1_Ch4_5_DMAMUX1_OVR_IRQn 1 */
 
   /* USER CODE END DMA1_Ch4_5_DMAMUX1_OVR_IRQn 1 */
