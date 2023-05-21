@@ -34,6 +34,8 @@ FATFS *pfs;
 DWORD fre_clust;
 uint32_t total, free_space;
 
+#define MAX_FILENAME_LENGTH 12
+
 #define RD_LEN  (8 * 14 * 2 *2)
 uint8_t Rec_Data[RD_LEN];  // 512/64 = 8 -> 8*14*2 (half transfer)
 volatile uint16_t Rec_Data_Ri = 0;
@@ -146,10 +148,20 @@ int main(void)
 
 	/* Check free space */
 	f_getfree("", &fre_clust, &pfs);
-
 	total = (uint32_t) ((pfs->n_fatent - 2) * pfs->csize * 0.5);
 	free_space = (uint32_t) (fre_clust * pfs->csize * 0.5);
-	f_open(&fil, "file2.txt", FA_OPEN_ALWAYS | FA_WRITE);
+
+	char filename[MAX_FILENAME_LENGTH];
+	uint16_t file_count = 0;
+	while (f_stat(filename, NULL) == FR_OK && file_count < 1000) {
+		file_count++;
+	}
+	sprintf(filename, "OUT%03d.TXT", file_count);
+
+	f_open(&fil, filename, FA_OPEN_ALWAYS | FA_WRITE);
+
+	f_puts("start", &fil);
+	f_sync(&fil);
 
 	//scan i2c
 	while (address == 0) {
@@ -205,6 +217,8 @@ int main(void)
 			}
 
 			if(Rec_Data_Ri == (RD_LEN)) Rec_Data_Ri = 0;
+
+			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 		}
 
 
@@ -241,7 +255,10 @@ int main(void)
 	}
 	f_close(&fil);
 	while(1)
-		__NOP();
+	{
+		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+		HAL_Delay(1000);
+	}
   /* USER CODE END 3 */
 }
 
@@ -412,6 +429,7 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
@@ -471,6 +489,8 @@ void Error_Handler(void)
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
+		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+		HAL_Delay(100);
 	}
   /* USER CODE END Error_Handler_Debug */
 }
