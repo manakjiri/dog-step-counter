@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <stdbool.h>
 #include "fatfs_sd.h"
 uint16_t address = 0;
 FATFS fs;
@@ -210,35 +211,22 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	size = 20 * 16 * 1024 / 64;  //1MB
-	//size = 1024 * free_space /64;
+	bool in_holdoff = false;
+	uint32_t cumulative = 0, steps = 0, steps_save_tick = 0;
+
+
+	//size = 20 * 16 * 1024 / 64;  //1MB
+	size = 1024 * free_space / 64;
 	while (size) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
-		/* poll for data by reading the status register, where bit 0 is DATA_RDY_INT
-		 * the register will clear automatically after its read */
-		/*HAL_I2C_Mem_Read(imu_i2c, address, 0x3A, 1, &data, 1, 2);
-		if (data & 0x01) {
-			HAL_I2C_Mem_Read(imu_i2c, address, 0x3b, 1, &(Rec_Data[Rec_Data_Ri]), 14,2);//TODO DMA
-			Rec_Data_Ri += 14;
-
-
-			if(Rec_Data_Ri == Rec_Data_Ti) {//overrun
-				//error_counter += 1;
-				Rec_Data_Ri -= 14;
-			}
-
-			if(Rec_Data_Ri == (RD_LEN)) Rec_Data_Ri = 0;
-
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-		}*/
-
 		if (HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin) == 0)
 			break;
 
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
 		if (Rec_Data_Ri != Rec_Data_Ti) {
 			--size;
 			acc.x = (int16_t)(Rec_Data[Rec_Data_Ti+0]<<8 | Rec_Data[Rec_Data_Ti+1]);
@@ -257,6 +245,35 @@ int main(void)
 				Rec_Data_Ti = 0;
 			}
 
+
+			int16_t speed = gyro.z;
+			const int16_t threshold = -4000;
+
+			if (speed < threshold && !in_holdoff)
+			{
+				cumulative += -(speed - threshold);
+				/* calculate the "area under a curve" when the speed goes below threshold
+				 * these values are anecdotal and come from data visualization
+				 * looking at the area allows us to detect prolonged slow steps as well as
+				 * fast-paced running steps */
+				if (cumulative > 20*5000)
+				{
+					steps += 1;
+					cumulative = 0;
+					in_holdoff = true;
+				}
+			}
+			else if (in_holdoff && speed > 0)
+			{
+				cumulative += speed;
+				if (cumulative > 50*3000)
+				{
+					cumulative = 0;
+					in_holdoff = false;
+				}
+			}
+
+
 			buffer_i += sprintf(&(buffer[buffer_i]),"%08x,%08x,%08x;%08.4f;%08x,%08x,%08x\r\n", acc.x,acc.y,acc.z,temp_d,gyro.x,gyro.y,gyro.z);
 			if(buffer_i & 0x3f) Error_Handler();//not proper length
 			if(buffer_i == 512){
@@ -264,6 +281,15 @@ int main(void)
 				buffer_i = 0;
 			}
 		}
+
+		if (HAL_GetTick() - steps_save_tick >= 1000)
+		{
+			steps_save_tick = HAL_GetTick();
+			char steps_buffer[32] = {0};
+			sprintf(steps_buffer, "%lu=%lu\r\n", HAL_GetTick(), steps);
+			f_puts(steps_buffer, &fil);
+		}
+
 	}
 	if(buffer_i){//SEND THE REST
 		buffer[buffer_i]=0;
