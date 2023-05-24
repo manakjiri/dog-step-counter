@@ -26,7 +26,6 @@
 #include "fatfs_sd.h"
 uint16_t address = 0;
 FATFS fs;
-FIL fil;
 FRESULT fresult;
 UINT br, bw;  // File read/write count
 /**** capacity related *****/
@@ -34,7 +33,7 @@ FATFS *pfs;
 DWORD fre_clust;
 uint32_t total, free_space;
 
-#define MAX_FILENAME_LENGTH 12
+#define MAX_FILENAME_LENGTH 20
 
 #define RD_LEN  (8 * 14 * 2 *2)
 uint8_t Rec_Data[RD_LEN];  // 512/64 = 8 -> 8*14*2 (half transfer)
@@ -84,6 +83,8 @@ DMA_HandleTypeDef hdma_i2c2_rx;
 SPI_HandleTypeDef hspi1;
 DMA_HandleTypeDef hdma_spi1_tx;
 
+TIM_HandleTypeDef htim14;
+
 /* USER CODE BEGIN PV */
 I2C_HandleTypeDef * const imu_i2c = &hi2c2;
 /* USER CODE END PV */
@@ -94,6 +95,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C2_Init(void);
+static void MX_TIM14_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -137,6 +139,7 @@ int main(void)
     Error_Handler();
   }
   MX_I2C2_Init();
+  MX_TIM14_Init();
   /* USER CODE BEGIN 2 */
 
 	//FATFS
@@ -144,6 +147,7 @@ int main(void)
 	if (fresult != FR_OK)
 		Error_Handler();
 
+	FIL fil;
 	/*************** Card capacity details ********************/
 
 	/* Check free space */
@@ -153,15 +157,20 @@ int main(void)
 
 	char filename[MAX_FILENAME_LENGTH];
 	uint16_t file_count = 0;
-	while (f_stat(filename, NULL) == FR_OK && file_count < 1000) {
-		file_count++;
-	}
-	sprintf(filename, "OUT%03d.TXT", file_count);
+	FILINFO finfo;
+	do {
+		sprintf(filename, "/OUT%03d.TXT", file_count);
+	} while (f_stat(filename, &finfo) == FR_OK && ++file_count < 1000);
 
-	f_open(&fil, filename, FA_OPEN_ALWAYS | FA_WRITE);
+	if (f_open(&fil, filename, FA_OPEN_ALWAYS | FA_WRITE) != FR_OK)
+		Error_Handler();
 
-	f_puts("start", &fil);
-	f_sync(&fil);
+	f_puts("start\n", &fil);
+	if (f_close(&fil) != FR_OK)
+		Error_Handler();
+
+	if (f_open(&fil, filename, FA_OPEN_APPEND | FA_WRITE) != FR_OK)
+		Error_Handler();
 
 	//scan i2c
 	while (address == 0) {
@@ -177,21 +186,26 @@ int main(void)
 	if (data != 0x68 && data != 0x72)
 		Error_Handler();
 
-	HAL_Delay(50);
+	data = 0x7;
+	HAL_I2C_Mem_Write(imu_i2c, address, 0x68, 1, &data, 1, 10);  //reset
+
+	HAL_Delay(100);
 
 	data = 0;
 	HAL_I2C_Mem_Write(imu_i2c, address, 0x6b, 1, &data, 1, 10);  //pow conf
 	HAL_I2C_Mem_Write(imu_i2c, address, 0x1b, 1, &data, 1, 10);  //gyr conf
 	HAL_I2C_Mem_Write(imu_i2c, address, 0x1c, 1, &data, 1, 10);  //acc conf
-	data = 16 - 1;  //data rate 8kHz prescaller; could be adjusted 32-1 (250 Hz) usually works without errors
+	data = 8 - 1;  //data rate 8kHz prescaller; could be adjusted 32-1 (250 Hz) usually works without errors
 	HAL_I2C_Mem_Write(imu_i2c, address, 0x19, 1, &data, 1, 10);  //data rate
 
 	data = 1 << 4;
 	HAL_I2C_Mem_Write(imu_i2c, address, 0x37, 1, &data, 1, 10); //irr clear when read
 	data = 1 << 0;
 	HAL_I2C_Mem_Write(imu_i2c, address, 0x38, 1, &data, 1, 10);  //irr enable
-	data = 0x7;
-	HAL_I2C_Mem_Write(imu_i2c, address, 0x68, 1, &data, 1, 10);  //reset
+
+	HAL_Delay(10);
+	HAL_TIM_Base_Start_IT(&htim14);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -205,7 +219,7 @@ int main(void)
 
 		/* poll for data by reading the status register, where bit 0 is DATA_RDY_INT
 		 * the register will clear automatically after its read */
-		HAL_I2C_Mem_Read(imu_i2c, address, 0x3A, 1, &data, 1, 2);
+		/*HAL_I2C_Mem_Read(imu_i2c, address, 0x3A, 1, &data, 1, 2);
 		if (data & 0x01) {
 			HAL_I2C_Mem_Read(imu_i2c, address, 0x3b, 1, &(Rec_Data[Rec_Data_Ri]), 14,2);//TODO DMA
 			Rec_Data_Ri += 14;
@@ -219,9 +233,12 @@ int main(void)
 			if(Rec_Data_Ri == (RD_LEN)) Rec_Data_Ri = 0;
 
 			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-		}
+		}*/
 
+		if (HAL_GPIO_ReadPin(BTN_GPIO_Port, BTN_Pin) == 0)
+			break;
 
+		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 		if (Rec_Data_Ri != Rec_Data_Ti) {
 			--size;
 			acc.x = (int16_t)(Rec_Data[Rec_Data_Ti+0]<<8 | Rec_Data[Rec_Data_Ti+1]);
@@ -240,7 +257,7 @@ int main(void)
 				Rec_Data_Ti = 0;
 			}
 
-			buffer_i += sprintf(&(buffer[buffer_i]),"%08x,%08x,%08x;%08.4f;%08x,%08x,%08x\r\n",acc.x,acc.y,acc.z,temp_d,gyro.x,gyro.y,gyro.z);
+			buffer_i += sprintf(&(buffer[buffer_i]),"%08x,%08x,%08x;%08.4f;%08x,%08x,%08x\r\n", acc.x,acc.y,acc.z,temp_d,gyro.x,gyro.y,gyro.z);
 			if(buffer_i & 0x3f) Error_Handler();//not proper length
 			if(buffer_i == 512){
 				f_puts(buffer, &fil);
@@ -253,7 +270,8 @@ int main(void)
 		f_puts(buffer, &fil);
 		buffer_i = 0;
 	}
-	f_close(&fil);
+	if (f_close(&fil) != FR_OK)
+		Error_Handler();
 	while(1)
 	{
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
@@ -397,6 +415,37 @@ static void MX_SPI1_Init(void)
 }
 
 /**
+  * @brief TIM14 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM14_Init(void)
+{
+
+  /* USER CODE BEGIN TIM14_Init 0 */
+
+  /* USER CODE END TIM14_Init 0 */
+
+  /* USER CODE BEGIN TIM14_Init 1 */
+
+  /* USER CODE END TIM14_Init 1 */
+  htim14.Instance = TIM14;
+  htim14.Init.Prescaler = 63;
+  htim14.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim14.Init.Period = 3999;
+  htim14.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim14.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim14) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM14_Init 2 */
+
+  /* USER CODE END TIM14_Init 2 */
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -465,6 +514,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(IRR0_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : BTN_Pin */
+  GPIO_InitStruct.Pin = BTN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(BTN_GPIO_Port, &GPIO_InitStruct);
+
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI4_15_IRQn, 2, 0);
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
@@ -487,7 +542,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
-	__disable_irq();
+	HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
 	while (1) {
 		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 		HAL_Delay(100);
