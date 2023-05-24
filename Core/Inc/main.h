@@ -1,8 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file   app_fatfs.h
-  * @brief  Header for fatfs applications
+  * @file           : main.h
+  * @brief          : Header for main.c file.
+  *                   This file contains the common defines of the application.
   ******************************************************************************
   * @attention
   *
@@ -18,13 +19,15 @@
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __APP_FATFS_H
-#define __APP_FATFS_H
+#ifndef __MAIN_H
+#define __MAIN_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "ff.h"
-#include "ff_gen_drv.h"
-#include "user_diskio.h" /* defines USER_Driver as external */
+#include "stm32g0xx_hal.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -47,21 +50,29 @@
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
-int32_t MX_FATFS_Init(void);
-int32_t MX_FATFS_Process(void);
+void Error_Handler(void);
+
 /* USER CODE BEGIN EFP */
 
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define SPI1_CS_Pin GPIO_PIN_4
+#define SPI1_CS_GPIO_Port GPIOA
+#define LED_Pin GPIO_PIN_6
+#define LED_GPIO_Port GPIOC
+#define IRR0_Pin GPIO_PIN_4
+#define IRR0_GPIO_Port GPIOB
+#define IRR0_EXTI_IRQn EXTI4_15_IRQn
+#define BTN_Pin GPIO_PIN_6
+#define BTN_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
-#define APP_OK                      0
-#define APP_ERROR                  -1
-#define APP_SD_UNPLUGGED           -2
+
 /* USER CODE END Private defines */
 
-extern FATFS USERFatFs;    /* File system object for USER logical drive */
-extern FIL USERFile;       /* File  object for USER */
-extern char USERPath[4];   /* USER logical drive path */
+#ifdef __cplusplus
+}
+#endif
 
-#endif /*__APP_FATFS_H */
+#endif /* __MAIN_H */

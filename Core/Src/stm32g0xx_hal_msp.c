@@ -1,7 +1,3 @@
-/* ########################################################################################
-##### THIS FILE GETS MODIFIED OR OVERWRITTEN BY THE preprocess.py SCRIPT BEFORE BUILD #####
-######################################################################################## */
-
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
@@ -23,10 +19,13 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include "init.h"
+#include "main.h"
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
+extern DMA_HandleTypeDef hdma_i2c2_rx;
+
+extern DMA_HandleTypeDef hdma_spi1_tx;
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
@@ -89,39 +88,48 @@ void HAL_MspInit(void)
 void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
-  if(hi2c->Instance==I2C1)
+  if(hi2c->Instance==I2C2)
   {
-  /* USER CODE BEGIN I2C1_MspInit 0 */
+  /* USER CODE BEGIN I2C2_MspInit 0 */
 
-  /* USER CODE END I2C1_MspInit 0 */
+  /* USER CODE END I2C2_MspInit 0 */
 
-  /** Initializes the peripherals clocks
-  */
-    PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1;
-    PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
-    if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    /**I2C2 GPIO Configuration
+    PA11 [PA9]     ------> I2C2_SCL
+    PA12 [PA10]     ------> I2C2_SDA
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF6_I2C2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /* Peripheral clock enable */
+    __HAL_RCC_I2C2_CLK_ENABLE();
+
+    /* I2C2 DMA Init */
+    /* I2C2_RX Init */
+    hdma_i2c2_rx.Instance = DMA1_Channel5;
+    hdma_i2c2_rx.Init.Request = DMA_REQUEST_I2C2_RX;
+    hdma_i2c2_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_i2c2_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_i2c2_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_i2c2_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_i2c2_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_i2c2_rx.Init.Mode = DMA_NORMAL;
+    hdma_i2c2_rx.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&hdma_i2c2_rx) != HAL_OK)
     {
       Error_Handler();
     }
 
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    /**I2C1 GPIO Configuration
-    PB9     ------> I2C1_SDA
-    PB8     ------> I2C1_SCL
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_8;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF6_I2C1;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    __HAL_LINKDMA(hi2c,hdmarx,hdma_i2c2_rx);
 
-    /* Peripheral clock enable */
-    __HAL_RCC_I2C1_CLK_ENABLE();
-  /* USER CODE BEGIN I2C1_MspInit 1 */
+  /* USER CODE BEGIN I2C2_MspInit 1 */
 
-  /* USER CODE END I2C1_MspInit 1 */
+  /* USER CODE END I2C2_MspInit 1 */
   }
 
 }
@@ -134,25 +142,27 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* hi2c)
 */
 void HAL_I2C_MspDeInit(I2C_HandleTypeDef* hi2c)
 {
-  if(hi2c->Instance==I2C1)
+  if(hi2c->Instance==I2C2)
   {
-  /* USER CODE BEGIN I2C1_MspDeInit 0 */
+  /* USER CODE BEGIN I2C2_MspDeInit 0 */
 
-  /* USER CODE END I2C1_MspDeInit 0 */
+  /* USER CODE END I2C2_MspDeInit 0 */
     /* Peripheral clock disable */
-    __HAL_RCC_I2C1_CLK_DISABLE();
+    __HAL_RCC_I2C2_CLK_DISABLE();
 
-    /**I2C1 GPIO Configuration
-    PB9     ------> I2C1_SDA
-    PB8     ------> I2C1_SCL
+    /**I2C2 GPIO Configuration
+    PA11 [PA9]     ------> I2C2_SCL
+    PA12 [PA10]     ------> I2C2_SDA
     */
-    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_9);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11);
 
-    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_8);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_12);
 
-  /* USER CODE BEGIN I2C1_MspDeInit 1 */
+    /* I2C2 DMA DeInit */
+    HAL_DMA_DeInit(hi2c->hdmarx);
+  /* USER CODE BEGIN I2C2_MspDeInit 1 */
 
-  /* USER CODE END I2C1_MspDeInit 1 */
+  /* USER CODE END I2C2_MspDeInit 1 */
   }
 
 }
@@ -187,6 +197,24 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
     GPIO_InitStruct.Alternate = GPIO_AF0_SPI1;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    /* SPI1 DMA Init */
+    /* SPI1_TX Init */
+    hdma_spi1_tx.Instance = DMA1_Channel1;
+    hdma_spi1_tx.Init.Request = DMA_REQUEST_SPI1_TX;
+    hdma_spi1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_spi1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_spi1_tx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_spi1_tx.Init.Mode = DMA_NORMAL;
+    hdma_spi1_tx.Init.Priority = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&hdma_spi1_tx) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(hspi,hdmatx,hdma_spi1_tx);
+
   /* USER CODE BEGIN SPI1_MspInit 1 */
 
   /* USER CODE END SPI1_MspInit 1 */
@@ -217,9 +245,61 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
     */
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7);
 
+    /* SPI1 DMA DeInit */
+    HAL_DMA_DeInit(hspi->hdmatx);
   /* USER CODE BEGIN SPI1_MspDeInit 1 */
 
   /* USER CODE END SPI1_MspDeInit 1 */
+  }
+
+}
+
+/**
+* @brief TIM_Base MSP Initialization
+* This function configures the hardware resources used in this example
+* @param htim_base: TIM_Base handle pointer
+* @retval None
+*/
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
+{
+  if(htim_base->Instance==TIM14)
+  {
+  /* USER CODE BEGIN TIM14_MspInit 0 */
+
+  /* USER CODE END TIM14_MspInit 0 */
+    /* Peripheral clock enable */
+    __HAL_RCC_TIM14_CLK_ENABLE();
+    /* TIM14 interrupt Init */
+    HAL_NVIC_SetPriority(TIM14_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(TIM14_IRQn);
+  /* USER CODE BEGIN TIM14_MspInit 1 */
+
+  /* USER CODE END TIM14_MspInit 1 */
+  }
+
+}
+
+/**
+* @brief TIM_Base MSP De-Initialization
+* This function freeze the hardware resources used in this example
+* @param htim_base: TIM_Base handle pointer
+* @retval None
+*/
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
+{
+  if(htim_base->Instance==TIM14)
+  {
+  /* USER CODE BEGIN TIM14_MspDeInit 0 */
+
+  /* USER CODE END TIM14_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM14_CLK_DISABLE();
+
+    /* TIM14 interrupt DeInit */
+    HAL_NVIC_DisableIRQ(TIM14_IRQn);
+  /* USER CODE BEGIN TIM14_MspDeInit 1 */
+
+  /* USER CODE END TIM14_MspDeInit 1 */
   }
 
 }
