@@ -166,7 +166,7 @@ int main(void)
 	if (f_open(&fil, filename, FA_OPEN_ALWAYS | FA_WRITE) != FR_OK)
 		Error_Handler();
 
-	f_puts("start\n", &fil);
+	f_puts("step counter v1.0\n", &fil);
 	if (f_close(&fil) != FR_OK)
 		Error_Handler();
 
