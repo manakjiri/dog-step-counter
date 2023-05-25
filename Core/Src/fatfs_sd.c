@@ -5,7 +5,7 @@
 #include "stm32g0xx_hal.h"
 #include "diskio.h"
 #include "fatfs_sd.h"
-#include "init.h"
+#include "main.h"
 
 
 extern SPI_HandleTypeDef 	hspi1;
